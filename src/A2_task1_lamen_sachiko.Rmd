@@ -1,0 +1,143 @@
+---
+title: "Palmetto Binary Logistic Regression (individual)"
+author: "Sachiko Lamen"
+date: "2/1/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(here)
+library(patchwork)
+library(AICcmodavg)
+library(kableExtra)
+library(broom)
+```
+
+### *Overview*
+This code uses a binary logistic regression to test feasibility of using variables plant height (cm), canopy length ((cm), canopy width (cm), and number of green leaves to classify whether a palmetto is species Serenoa repens or Sabal etonia.
+
+```{r}
+# read in data, remove columns containing only NA values
+palmetto <- read_csv(here("data", "palmetto.csv")) %>%
+  select(c(species, height, width, length, green_lvs)) %>%
+  mutate(species = case_when(species == "1" ~ "Serona repens", 
+                          species == "2" ~ "Sabal etonia")) %>%
+  mutate(species = as.character(species)) %>%
+  mutate(species = fct_drop(species)) %>%
+  drop_na()
+  
+```
+
+```{r}
+# exploratory visualizations
+
+# compare height and # of leaves
+exp1 <- ggplot(data = palmetto, aes(x = height, y = green_lvs)) +
+  geom_point(aes(color = species), size = 0.1) +
+  facet_grid(~species) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size = 8, angle = 45),
+          axis.text.y = element_text(size = 8, angle=45)) +
+  labs(x = "Height (cm)",
+       y = "# of Green Leaves",
+       color = "Species")
+
+# compare height and length of canopy
+exp2 <- ggplot(data = palmetto, aes(x = height, y = length)) +
+  geom_point(aes(color = species), size = 0.1) +
+  facet_grid(~species) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size = 8, angle = 45),
+          axis.text.y = element_text(size = 8, angle=45)) +
+  labs(x = "Height (cm)",
+       y = "Length (cm)",
+       color = "Species")
+
+# compare width and # of green leaves
+exp3 <- ggplot(data = palmetto, aes(x = width, y = green_lvs)) +
+  geom_point(aes(color = species), size = 0.1) +
+  facet_grid(~species) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size = 8, angle = 45),
+          axis.text.y = element_text(size = 8, angle=45)) +
+  labs(x = "Width (cm)",
+       y = "# of Green Leaves",
+       color = "Species")
+
+# compare length and width of canopy
+exp4 <- ggplot(data = palmetto, aes(x = length, y = width)) +
+  geom_point(aes(color = species), size = 0.1) +
+  facet_grid(~species) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size = 8, angle = 45),
+          axis.text.y = element_text(size = 8, angle=45)) +
+  labs(x = "Length (cm)",
+       y = "Width (cm)",
+       color = "Species")
+
+# Combine plots into one figure using `patchwork`
+patchwork <- (exp1 | exp2)/(exp3 | exp4) +
+  plot_layout(guides = 'collect')
+
+patchwork +
+  plot_annotation(tag_levels = c('A'),
+                            tag_suffix = ')')
+```
+Serona repens and Sabal etonia exhibit noticeable differences in their relationship between plant height and number of green leaves (A) as well as canopy width and number of green leaves (C). In both cases, Serona repens appears to have more green leaves than Sabal etonia. The similarities in the distribution of number of green leaves in A and C suggests that plant height and canopy width may be colinearly related. Additionally, both species exhibit strongly positive correlations between canopy length and plant height (B) and canopy length and width (D). Serona repens appears to grow slightly taller than Sabal etonia but Sabal etonia appears to have greater canopy length. This suggests that Serona repens is taller with more leaves and a smaller canopy length while and Sabal etonia is shorter with fewer leaves and a larger canopy length. Based on these exploratory plots, good predictor variables may be the *number of green leaves, plant height, and canopy length*.
+
+###*Binary Logistic Regression*
+Determine the probability of the plant species being either Serenoa repens or Sabal etonia based on several predictor variables. Perform the analysis twice, using cross validation to compare two models:
+
+```{r}
+# Write formulas for regressions
+f1 <- species ~ height + length + green_lvs + width
+f2 <- species ~ height + width + green_lvs 
+
+# Generate log odds of species for f1 and f2
+palmetto_blr1 <- glm(formula = f1,
+                     data = palmetto,
+                     family = "binomial")
+
+palmetto_blr2 <- glm(formula = f2, 
+                     data = palmetto,
+                     family = "binomial")
+
+# look at model coefficients and AIC
+aictab(list(palmetto_blr1, palmetto_blr2))
+```
+Model 1 is significantly better than Model 2. ∆AIC = 792.91
+```{r}
+# Change log odds to probability
+blr1_fitted <- palmetto_blr1 %>%
+  augment(type.predict = "response") 
+
+blr2_fitted <- palmetto_blr2 %>%
+  augment(type.predict = "response")
+
+#### Note: reference level species is "Sabal etonia"
+
+# create tidy data frame of summary statistics
+blr1_tidy <- tidy(palmetto_blr1)
+blr2_tidy <- tidy(palmetto_blr2)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
