@@ -1,0 +1,22 @@
+---
+title: "Parameter Estimation with Purrr- Lizards Length to Weight"
+author: "Sachiko Lamen"
+date: "2/5/2022"
+output: html_document
+---
+
+```{r setup, include= TRUE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(purrr)
+library(here)
+library(Metrics)
+```
+
+```{r}
+# Read in and clean data
+lizards <- read_csv(here("data", "lizard.csv"))
+lizards$spp = tolower(lizards$spp)
+lizards$sex = tolower(lizards$sex)
+```
+

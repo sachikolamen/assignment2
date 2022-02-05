@@ -12,14 +12,17 @@ library(here)
 library(patchwork)
 library(AICcmodavg)
 library(kableExtra)
+library(equatiomatic)
+library(caret)
 library(broom)
+library(janitor)
 ```
 
 ### *Overview*
 This code uses a binary logistic regression to test feasibility of using variables plant height (cm), canopy length ((cm), canopy width (cm), and number of green leaves to classify whether a palmetto is species Serenoa repens or Sabal etonia.
 
 ```{r}
-# read in data, remove columns containing only NA values
+# read in data, remove columns containing only NA values, reassign species # to correspond to spp name
 palmetto <- read_csv(here("data", "palmetto.csv")) %>%
   select(c(species, height, width, length, green_lvs)) %>%
   mutate(species = case_when(species == "1" ~ "Serona repens", 
@@ -91,7 +94,7 @@ patchwork +
 ```
 Serona repens and Sabal etonia exhibit noticeable differences in their relationship between plant height and number of green leaves (A) as well as canopy width and number of green leaves (C). In both cases, Serona repens appears to have more green leaves than Sabal etonia. The similarities in the distribution of number of green leaves in A and C suggests that plant height and canopy width may be colinearly related. Additionally, both species exhibit strongly positive correlations between canopy length and plant height (B) and canopy length and width (D). Serona repens appears to grow slightly taller than Sabal etonia but Sabal etonia appears to have greater canopy length. This suggests that Serona repens is taller with more leaves and a smaller canopy length while and Sabal etonia is shorter with fewer leaves and a larger canopy length. Based on these exploratory plots, good predictor variables may be the *number of green leaves, plant height, and canopy length*.
 
-###*Binary Logistic Regression*
+### *Binary Logistic Regression*
 Determine the probability of the plant species being either Serenoa repens or Sabal etonia based on several predictor variables. Perform the analysis twice, using cross validation to compare two models:
 
 ```{r}
@@ -108,10 +111,11 @@ palmetto_blr2 <- glm(formula = f2,
                      data = palmetto,
                      family = "binomial")
 
-# look at model coefficients and AIC
-aictab(list(palmetto_blr1, palmetto_blr2))
+# Compare models
+AIC <- aictab(list(palmetto_blr1, palmetto_blr2))
 ```
-Model 1 is significantly better than Model 2. ∆AIC = 792.91
+∆AIC = `r round(AIC$Delta_AICc)` between Model 1 and Model 2 suggests that Model 1 is significantly better than Model 2. This is supported by the AICcWt of 1.0 for Model 1 
+
 ```{r}
 # Change log odds to probability
 blr1_fitted <- palmetto_blr1 %>%
@@ -120,12 +124,79 @@ blr1_fitted <- palmetto_blr1 %>%
 blr2_fitted <- palmetto_blr2 %>%
   augment(type.predict = "response")
 
-#### Note: reference level species is "Sabal etonia"
+#### Note: reference level (0) species is "Sabal etonia"
+```
 
-# create tidy data frame of summary statistics
-blr1_tidy <- tidy(palmetto_blr1)
-blr2_tidy <- tidy(palmetto_blr2)
+### *Cross Validation*
 
+```{r}
+# Use the `caret` package (classification and regression training) to automate the cross-validation training
+set.seed(76)
+
+tr_ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
+
+## train the model to do cross validation on 10 folds on palmetto dataset
+model1 <- train(f1, data = palmetto,
+                method = 'glm', family = "binomial", 
+                trControl = tr_ctrl)
+
+model2 <- train(f2, data = palmetto,
+                method = 'glm', family = "binomial", 
+                trControl = tr_ctrl)
+```
+
+Model 1 appears to be the better model as it predicts the correct species with `r round(model1$results$Accuracy, 3)*100`% accuracy while Model 2 predicts the correct species with `r round(model2$results$Accuracy, 3)*100`% accuracy.
+
+```{r}
+# Choose Model 1, train the final model on dataset based on the formula `f1`
+
+final_mdl <-glm(f1, 
+                data = palmetto,
+                family = "binomial")
+
+final_mdl_tidy <- tidy(final_mdl)
+final_mdl_tidy$p.value <- ifelse(final_mdl_tidy$p.value < 0.001, paste("< 0.001"))
+
+final_table <- final_mdl_tidy %>%
+  select(-statistic) %>%
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "height" ~ "Height (cm)",
+                          term == "length" ~ "Length (cm)",
+                          term == "green_lvs" ~ "Number of Green Leaves",
+                          term == "width" ~ "Widht (cm)")) %>%
+  kable(col.names = c("Variable", "Coefficient", "Std. Error", "P-Value"),
+        digits = 3) %>%
+  kable_styling(bootstrap_options = "basic",
+                position = "left",
+                full_width = FALSE)
+
+final_table
+```
+Final Model with coefficients:
+`r equatiomatic::extract_eq(final_mdl, wrap = TRUE, use_coefs = TRUE)`
+
+A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+
+```{r}
+cutoff <- blr1_fitted %>% 
+  mutate(predict = case_when(.fitted >= .5 ~ "Serona repens", 
+    .fitted < .5 ~ "Sabal etonia")) %>% 
+  mutate(result = case_when(
+    species == predict ~ "Correct",
+    species != predict ~ "Incorrect"))
+
+
+cutoff_summary <- cutoff %>%
+  tabyl(species, result) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable(col.names = c("Species", "Correct", "Incorrect"),
+        caption = "xxxx") %>%
+  kable_styling(bootstrap_options = "striped",
+                position = "left", full_width = FALSE)
+  
+cutoff_summary
 ```
 
 
