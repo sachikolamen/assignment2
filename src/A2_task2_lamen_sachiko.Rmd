@@ -11,12 +11,166 @@ library(tidyverse)
 library(purrr)
 library(here)
 library(Metrics)
+library(nlshelper)
+library(janitor)
+library(kableExtra)
+library(ggrepel)
 ```
+
+### *Overview*
+use non linear least squares to estimate parameters of a length to weight model for lizard populations in New Mexico. 
+\begin{equation}
+W = a(SVL)^b
+\end{equation}
+W = weight, SVL = snout to vent length, a and b are parameters that need to ve fitted
 
 ```{r}
 # Read in and clean data
-lizards <- read_csv(here("data", "lizard.csv"))
-lizards$spp = tolower(lizards$spp)
-lizards$sex = tolower(lizards$sex)
+lizards <- read_csv(here("data", "lizard.csv")) 
+
+lizards_clean <- lizards %>%
+  select(spp:weight) %>%
+  clean_names()
+lizards_clean$spp = tolower(lizards_clean$spp)
+lizards_clean$sex = tolower(lizards_clean$sex)
 ```
+
+```{r}
+# create function
+lizards_model <- function(a, SVL, b) {
+  W = a*SVL^b
+  return(W)
+}
+
+# Log transform data because model is exponential, can use for OSL regression later
+log_lizards <- lizards_clean %>%
+  mutate(sv_length_log = log(sv_length)) %>%
+  mutate(weight_log = log(weight))
+
+# Create model to be used to guess parameter values
+guess_model <- lm(weight_log ~ sv_length_log, data = log_lizards) 
+
+# Generate coefficients to be used for NLS start list
+coef <-coefficients(guess_model)
+
+# From above, we see that parameter b can be estimated at 2.54. Need to calculate parameter a by transforming intercept
+lizard_nls <- nls(weight ~ lizards_model(a, sv_length, b),
+                  data = lizards_clean,
+                  start = list(
+                    a = 2.718^(coef[1]/coef[2]),
+                    b = coef[2]),
+                    trace = TRUE)
+
+# NLS model kable output for html
+
+nls_tidy <- tidy(lizard_nls) 
+
+nls_tidy$p.value <- ifelse(nls_tidy$p.value <0.001, paste("<0.001"))
+
+nls_tidy %>%
+  select(-statistic) %>%
+  kable(col.names = c("Parameter", "Estimate", "Std. Error", "P-Value")) %>% 
+  kable_styling(bootstrap_options = "striped",
+                position = "left", full_width = FALSE)
+
+nls_tidy
+
+```
+
+```{r}
+# Add column with predicted values to dataframe
+predicted_weight <- predict(lizard_nls)
+
+lizards_final <- data.frame(lizards_clean, predicted_weight) %>%
+  mutate(sex = case_when(sex == "f" ~ "Female",
+            sex == "m" ~ "Male"))
+
+# Plot fitted model
+ggplot(data = lizards_final, aes(x = sv_length, y = predicted_weight)) +
+  geom_point(aes(x = sv_length, y = weight, color = sex)) +
+  scale_color_manual(values = c("blue", "green")) +
+  geom_line(color = "red") +
+  theme_minimal() +
+  labs(x = "Snout-Vent Length (mm)",
+       y = "Weight (g)",
+       title = "General Model Fit") +
+  theme(legend.title = element_blank())
+```
+
+```{r}
+# Filter dataset for male Western Whiptail lizards (Cnemidophorus tigrisatus)
+whip_subset <- lizards_clean %>%
+  filter(spp == "cnti", sex == "m")
+
+whip_log <- log_lizards %>%
+  filter(spp == "cnti", sex == "m")
+
+whip_guess_model <- lm(weight_log ~ sv_length_log, data = whip_log) 
+
+# Generate coefficients to be used for NLS start list
+whip_coef <-coefficients(whip_guess_model)
+
+
+whip_nls <- nls(weight ~ lizards_model(a, sv_length, b),
+                  data = whip_subset,
+                  start = list(
+                    a = 2.718^(whip_coef[1]/whip_coef[2]),
+                    b = whip_coef[2]),
+                    trace = TRUE)
+
+# NLS model kable output for html
+whip_nls_tidy <- tidy(whip_nls) 
+
+whip_nls_tidy %>%
+  select(-statistic) %>%
+  kable(col.names = c("Parameter", "Estimate", "Std. Error", "P-Value")) %>% 
+  kable_styling(bootstrap_options = "striped",
+                position = "left", full_width = FALSE)
+
+# Add column with predicted values to dataframe
+whip_predict <- predict(whip_nls)
+
+whip_final <- data.frame(whip_subset, whip_predict) %>%
+  mutate(sex = case_when(sex == "f" ~ "Female",
+            sex == "m" ~ "Male"))
+
+# Select for cnti and male in lizards_final so that data sets will have same # of observations
+compare <- lizards_final %>%
+  filter(spp == "cnti", sex == "Male")
+
+# Bind together whip_final and lizards_final
+compare_final <- data.frame(compare, whip_final)
+
+# Graph both model fits on male western whiptail data
+ggplot(data = compare_final) +
+  geom_point(aes(x = sv_length, y = weight)) +
+  geom_line(aes(x = sv_length, y = whip_predict, 
+                color = "Whiptail Model")) +
+  geom_line(aes(x = sv_length, y = predicted_weight,
+                color = "General Model")) +
+  scale_color_manual(values = c("Whiptail Model" = "purple",
+                                "General Model" = "red")) +
+  theme_minimal() +
+  labs(x = "Snout-Vent Length (mm)",
+       y = "Weight (g)",
+       title = "Model Fit Comparison") +
+  theme(legend.title = element_blank())
+
+
+whip_rmse <- rmse(compare_final$weight, compare_final$whip_predict)
+lizard_rmse <- rmse(compare_final$weight, compare_final$predicted_weight)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
