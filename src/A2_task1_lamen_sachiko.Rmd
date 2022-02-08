@@ -2,10 +2,13 @@
 title: "Palmetto Binary Logistic Regression (individual)"
 author: "Sachiko Lamen"
 date: "2/1/2022"
-output: html_document
+output: 
+  html_document: 
+  theme: flatly
+  code_folding: hide
 ---
 
-```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+```{r setup, include=TRUE, message = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(here)
@@ -18,8 +21,8 @@ library(broom)
 library(janitor)
 ```
 
-### *Overview*
-This code uses a binary logistic regression to test feasibility of using variables plant height (cm), canopy length ((cm), canopy width (cm), and number of green leaves to classify whether a palmetto is species Serenoa repens or Sabal etonia.
+### **Overview**
+This code uses a binary logistic regression to test feasibility of using variables plant height (cm), canopy length (cm), canopy width (cm), and number of green leaves to classify whether a palmetto is species Serenoa repens or Sabal etonia. Data used in this analysis was collected from Archibold's Red Hill in south-central Florida from 1981 - 2017. 
 
 ```{r}
 # read in data, remove columns containing only NA values, reassign species # to correspond to spp name
@@ -34,9 +37,9 @@ palmetto <- read_csv(here("data", "palmetto.csv")) %>%
 ```
 
 ```{r}
-# exploratory visualizations
+# exploratory visualizations: height, canopy length, canopy width, and green leaves for the two species
 
-# compare height and # of leaves
+# height and # of leaves
 exp1 <- ggplot(data = palmetto, aes(x = height, y = green_lvs)) +
   geom_point(aes(color = species), size = 0.1) +
   facet_grid(~species) +
@@ -48,7 +51,7 @@ exp1 <- ggplot(data = palmetto, aes(x = height, y = green_lvs)) +
        y = "# of Green Leaves",
        color = "Species")
 
-# compare height and length of canopy
+# height and length of canopy
 exp2 <- ggplot(data = palmetto, aes(x = height, y = length)) +
   geom_point(aes(color = species), size = 0.1) +
   facet_grid(~species) +
@@ -60,7 +63,7 @@ exp2 <- ggplot(data = palmetto, aes(x = height, y = length)) +
        y = "Length (cm)",
        color = "Species")
 
-# compare width and # of green leaves
+# width and # of green leaves
 exp3 <- ggplot(data = palmetto, aes(x = width, y = green_lvs)) +
   geom_point(aes(color = species), size = 0.1) +
   facet_grid(~species) +
@@ -72,7 +75,7 @@ exp3 <- ggplot(data = palmetto, aes(x = width, y = green_lvs)) +
        y = "# of Green Leaves",
        color = "Species")
 
-# compare length and width of canopy
+# length and width of canopy
 exp4 <- ggplot(data = palmetto, aes(x = length, y = width)) +
   geom_point(aes(color = species), size = 0.1) +
   facet_grid(~species) +
@@ -92,10 +95,14 @@ patchwork +
   plot_annotation(tag_levels = c('A'),
                             tag_suffix = ')')
 ```
-Serona repens and Sabal etonia exhibit noticeable differences in their relationship between plant height and number of green leaves (A) as well as canopy width and number of green leaves (C). In both cases, Serona repens appears to have more green leaves than Sabal etonia. The similarities in the distribution of number of green leaves in A and C suggests that plant height and canopy width may be colinearly related. Additionally, both species exhibit strongly positive correlations between canopy length and plant height (B) and canopy length and width (D). Serona repens appears to grow slightly taller than Sabal etonia but Sabal etonia appears to have greater canopy length. This suggests that Serona repens is taller with more leaves and a smaller canopy length while and Sabal etonia is shorter with fewer leaves and a larger canopy length. Based on these exploratory plots, good predictor variables may be the *number of green leaves, plant height, and canopy length*.
 
-### *Binary Logistic Regression*
-Determine the probability of the plant species being either Serenoa repens or Sabal etonia based on several predictor variables. Perform the analysis twice, using cross validation to compare two models:
+**Figure 1. Comparison of plant height (cm), number of green leaves, canopy width (cm), and canopy length (cm) by species.** In all graphs, red data points represent Palmetto species Sabal etonia while blue data points represent Serona repens. A) Compares plant height (cm) to number of green leaves, B) Compares canopy height (cm) to canopy length (cm). C) Compares plant width (cm) to number of green leaves, D) Compares canopy width (cm) to canopy length (cm). 
+
+
+Serona repens and Sabal etonia exhibit noticeable differences in their relationship between plant height and number of green leaves (A) as well as canopy width and number of green leaves (C). In both cases, Serona repens appears to have more green leaves than Sabal etonia. The similarities in the distribution of number of green leaves in A and C suggests that plant height and canopy width may be colinearly related. Additionally, both species exhibit strongly positive correlations between canopy length and plant height (B) and canopy length and width (D). Serona repens appears to grow slightly taller than Sabal etonia but Sabal etonia appears to have greater canopy length. This suggests that Serona repens is taller with more leaves and a smaller canopy length while and Sabal etonia is shorter with fewer leaves and a larger canopy length. Based on these exploratory plots, good predictor variables may be the number of green leaves, plant height, and canopy length.
+
+### **Binary Logistic Regression**
+Use BLR to determine the probability of the plant species being either Serenoa repens or Sabal etonia based on several predictor variables. Analysisis performed twice, using cross validation to compare the fit of the two models:
 
 ```{r}
 # Write formulas for regressions
@@ -114,10 +121,10 @@ palmetto_blr2 <- glm(formula = f2,
 # Compare models
 AIC <- aictab(list(palmetto_blr1, palmetto_blr2))
 ```
-∆AIC = `r round(AIC$Delta_AICc)` between Model 1 and Model 2 suggests that Model 1 is significantly better than Model 2. This is supported by the AICcWt of 1.0 for Model 1 
+AIC values indicate that Model 1 is the better model. Large ∆AIC (`r round(AIC$Delta_AICc)`) between Model 1 and Model 2 suggests that Model 1 is significantly better than Model 2. This is supported by the AICcWt of 1.0 for Model 1 
 
 ```{r}
-# Change log odds to probability
+# Change log odds to probability to make it easier to interpret results
 blr1_fitted <- palmetto_blr1 %>%
   augment(type.predict = "response") 
 
@@ -127,7 +134,7 @@ blr2_fitted <- palmetto_blr2 %>%
 #### Note: reference level (0) species is "Sabal etonia"
 ```
 
-### *Cross Validation*
+### **Cross Validation**
 
 ```{r}
 # Use the `caret` package (classification and regression training) to automate the cross-validation training
@@ -145,10 +152,10 @@ model2 <- train(f2, data = palmetto,
                 trControl = tr_ctrl)
 ```
 
-Model 1 appears to be the better model as it predicts the correct species with `r round(model1$results$Accuracy, 3)*100`% accuracy while Model 2 predicts the correct species with `r round(model2$results$Accuracy, 3)*100`% accuracy.
+Cross validation indicates that Model 1 is the better model as it predicts the correct species with `r round(model1$results$Accuracy, 3)*100`% accuracy while Model 2 predicts the correct species with `r round(model2$results$Accuracy, 3)*100`% accuracy. This supports the results of the AIC comparison that also indicated Model 1 as the superior model (∆AIC = `r round(AIC$Delta_AICc)`).
 
 ```{r}
-# Choose Model 1, train the final model on dataset based on the formula `f1`
+# Choose Model 1, train the final model on palmetto dataset based on the formula `f1`
 
 final_mdl <-glm(f1, 
                 data = palmetto,
@@ -163,8 +170,9 @@ final_table <- final_mdl_tidy %>%
                           term == "height" ~ "Height (cm)",
                           term == "length" ~ "Length (cm)",
                           term == "green_lvs" ~ "Number of Green Leaves",
-                          term == "width" ~ "Widht (cm)")) %>%
+                          term == "width" ~ "Width (cm)")) %>%
   kable(col.names = c("Variable", "Coefficient", "Std. Error", "P-Value"),
+        caption = "**Table 1. Predictor Model Coefficients.** Each coefficient value associated with its corresponding variable has a significant p-value of <0.001. Sabal etoinia is used as the reference level species.",
         digits = 3) %>%
   kable_styling(bootstrap_options = "basic",
                 position = "left",
@@ -172,10 +180,13 @@ final_table <- final_mdl_tidy %>%
 
 final_table
 ```
+
+
 Final Model with coefficients:
 `r equatiomatic::extract_eq(final_mdl, wrap = TRUE, use_coefs = TRUE)`
 
-A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+### **Classification Success Rate**
+The following section evaluates how successfully this model (see above) will classify a plant as the correct species using a 50% cutoff.
 
 ```{r}
 cutoff <- blr1_fitted %>% 
@@ -192,16 +203,20 @@ cutoff_summary <- cutoff %>%
   adorn_pct_formatting() %>%
   adorn_ns() %>%
   kable(col.names = c("Species", "Correct", "Incorrect"),
-        caption = "xxxx") %>%
+        caption = "**Table 2. Classification Results.** The model predicts the correct species of plant correctly for both species over 90% of the time.") %>%
   kable_styling(bootstrap_options = "striped",
                 position = "left", full_width = FALSE)
   
 cutoff_summary
 ```
 
+### **Conclusion**
 
+Model 1 is a good predictor of palmetto species, correctly guessing the correct speices with `r round(model1$results$Accuracy, 3)*100`% accuracy. Upon further investigation of classification success we find that the model successfully predicts both Sabal etonia and Serona ripens with over 90% success. This model takes into account plant height (cm), canopy length (cm), canopy width (cm), and number of green leaves. 
 
+### **Citation**
 
+Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
 
 
 
